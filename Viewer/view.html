@@ -3,79 +3,51 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Screen and Camera Sharing Streamer</title>
+  <title>Viewer</title>
 </head>
 <body>
-  <h1>Screen and Camera Sharing Streamer</h1>
+  <h1>Viewer</h1>
   <p>Status: <span id="status">Connecting...</span></p>
-  <button id="startScreenShare">Start Screen Sharing</button>
-  <button id="startCameraShare">Start Camera Sharing</button>
+  <video id="video" autoplay controls style="width: 100%; height: auto;"></video>
 
   <script>
     const status = document.getElementById('status');
-    const startScreenShareBtn = document.getElementById('startScreenShare');
-    const startCameraShareBtn = document.getElementById('startCameraShare');
-    const socket = new WebSocket('wss://liveserver-5qol.onrender.com');
+    const videoElement = document.getElementById('video');
+    const socket = new WebSocket('wss://liveserver-5qol.onrender.com'); // Updated to secure WebSocket URL
+    const mediaSource = new MediaSource();
+    videoElement.src = URL.createObjectURL(mediaSource);
 
     socket.onopen = () => {
-      status.textContent = 'Connected to server as streamer';
-      socket.send(JSON.stringify({ type: 'streamer' }));
+      status.textContent = 'Connected to server as viewer';
+      socket.send(JSON.stringify({ type: 'viewer' }));
     };
+
+    mediaSource.addEventListener('sourceopen', () => {
+      const sourceBuffer = mediaSource.addSourceBuffer('video/webm; codecs=vp8');
+
+      socket.onmessage = (event) => {
+        if (typeof event.data === 'string') {
+          const message = JSON.parse(event.data);
+
+          if (message.type === 'no-stream') {
+            status.textContent = 'No active stream';
+          } else if (message.type === 'end-stream') {
+            status.textContent = 'Stream ended';
+            mediaSource.endOfStream();
+          }
+        } else if (event.data instanceof Blob || event.data instanceof ArrayBuffer) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const arrayBuffer = reader.result;
+            sourceBuffer.appendBuffer(new Uint8Array(arrayBuffer));
+          };
+          reader.readAsArrayBuffer(event.data);
+        }
+      };
+    });
 
     socket.onclose = () => {
       status.textContent = 'Disconnected from server';
-    };
-
-    // Function to start sharing media stream
-    async function startSharing(mediaStream, label) {
-      status.textContent = `${label} started...`;
-
-      const videoTrack = mediaStream.getVideoTracks()[0];
-      const mediaRecorder = new MediaRecorder(mediaStream, {
-        mimeType: 'video/webm; codecs=vp8',
-      });
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          socket.send(event.data);
-        }
-      };
-
-      mediaRecorder.start(100); // Send chunks every 100ms
-
-      // Stop streaming when the media track ends
-      videoTrack.onended = () => {
-        mediaRecorder.stop();
-        status.textContent = `${label} ended`;
-      };
-    }
-
-    // Start screen sharing
-    startScreenShareBtn.onclick = async () => {
-      try {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: false,
-        });
-        startSharing(screenStream, 'Screen sharing');
-      } catch (err) {
-        console.error('Error starting screen sharing:', err);
-        status.textContent = 'Failed to start screen sharing';
-      }
-    };
-
-    // Start camera sharing
-    startCameraShareBtn.onclick = async () => {
-      try {
-        const cameraStream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false, // Set to true if audio is needed
-        });
-        startSharing(cameraStream, 'Camera sharing');
-      } catch (err) {
-        console.error('Error starting camera sharing:', err);
-        status.textContent = 'Failed to start camera sharing';
-      }
     };
   </script>
 </body>
