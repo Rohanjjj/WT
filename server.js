@@ -1,12 +1,16 @@
 const WebSocket = require('ws');
 
+// Define the port using environment variables or default to 8080
+const PORT = process.env.PORT || 8080;
+
 // Store connected clients
 const clients = {
   streamers: null, // Only one active streamer
-  viewers: new Set()
+  viewers: new Set(),
 };
 
-const wss = new WebSocket.Server({ port: 8080 });
+// Initialize the WebSocket server
+const wss = new WebSocket.Server({ port: PORT });
 
 wss.on('connection', (ws) => {
   console.log('New client connected');
@@ -54,4 +58,4 @@ wss.on('connection', (ws) => {
   });
 });
 
-console.log('WebSocket server running on ws://localhost:8080');
+console.log(`WebSocket server running on ws://localhost:${PORT}`);
